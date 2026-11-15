@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#050000">
+<title>Into the Unknown — Personal Intro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#030000;color:#f7eaea}
+body{font-family:Georgia,serif}
+#app{position:relative;width:100%;height:100%;height:100svh;background:#030000;overflow:hidden}
+#stage{position:absolute;inset:0;width:100%;height:100%;display:block}
+#entry{position:absolute;z-index:5;inset:0;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at 50% 52%,#210305 0%,#0b0102 42%,#020000 82%);transition:opacity 1.2s ease}
+#entry.hide{opacity:0;pointer-events:none}
+.panel{width:min(100%,520px);text-align:center}
+.eyebrow{font:10px/1.5 Arial,sans-serif;letter-spacing:.55em;color:#bd7777;margin:0 0 24px}
+.brand{font-family:"Bodoni Moda",Georgia,serif;font-weight:700;font-size:clamp(42px,10vw,76px);line-height:.84;letter-spacing:.035em;color:#f3e5e5;text-shadow:0 0 8px #ff3333,0 0 30px #8e0000;margin:0}
+.sub{font:10px Arial,sans-serif;letter-spacing:.42em;color:#a66b6b;margin:25px 0 42px}
+input[type=text]{width:100%;padding:17px 14px;background:#080203;border:1px solid #8d2929;color:#fff;text-align:center;font:16px "Bodoni Moda",Georgia,serif;letter-spacing:.13em;outline:none;border-radius:0}
+input[type=text]:focus{border-color:#ff4747;box-shadow:0 0 24px #8c000066}
+input::placeholder{color:#805555}
+.actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px}
+button,.file-label{font:10px Arial,sans-serif;letter-spacing:.2em;color:#f5dddd;background:#160506;border:1px solid #8e2929;padding:14px 18px;cursor:pointer;transition:.25s}
+button:hover,.file-label:hover{background:#6d080b;box-shadow:0 0 22px #b00000}
+.file-label input{display:none}
+.help{font:10px/1.6 Arial,sans-serif;color:#805d5d;margin:22px 0 0}
+#toolbar{position:absolute;z-index:6;bottom:max(18px,env(safe-area-inset-bottom));left:0;right:0;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:0 12px;opacity:0;pointer-events:none;transition:opacity .7s}
+#toolbar.show{opacity:1;pointer-events:auto}
+#toolbar button{padding:11px 14px;font-size:9px;background:#080203cc}
+#soundStatus{position:absolute;z-index:6;top:max(15px,env(safe-area-inset-top));left:0;right:0;text-align:center;font:9px Arial,sans-serif;letter-spacing:.3em;color:#9b6464;pointer-events:none}
+@media(max-width:480px){.eyebrow{letter-spacing:.35em}.sub{letter-spacing:.25em}.actions button,.file-label{flex:1 1 100%}.help{max-width:290px;margin:20px auto 0}#toolbar{bottom:max(12px,env(safe-area-inset-bottom))}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="stage" aria-label="Animated red cinematic title"></canvas>
+  <section id="entry">
+    <div class="panel">
+      <p class="eyebrow">HAWKINS • INDIANA</p>
+      <h1 class="brand">YOUR<br>STORY</h1>
+      <p class="sub">A NAME WILL CHANGE EVERYTHING</p>
+      <form id="form">
+        <input id="name" type="text" maxlength="26" placeholder="ENTER A NAME" autocomplete="off" required>
+        <div class="actions">
+          <button type="submit">BEGIN THE INTRO</button>
+          <label class="file-label">REPLACE AUDIO
+            <input id="audioFile" type="file" accept="audio/*">
+          </label>
+        </div>
+      </form>
+      <p class="help" id="audioHelp">Default soundtrack loaded. Press BEGIN INTRO to start the sound. Use REPLACE AUDIO to choose another track.</p>
+    </div>
+  </section>
+  <div id="soundStatus">A CINEMATIC EXPERIENCE</div>
+  <div id="toolbar">
+    <button id="replay">REPLAY</button>
+    <button id="change">CHANGE NAME</button>
+    <button id="mute">MUTE</button>
+  </div>
+  <audio id="sound" preload="auto" src="assets/intro-soundtrack.mp3"></audio>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById('stage');
+  const ctx = canvas.getContext('2d');
+  const entry = document.getElementById('entry');
+  const form = document.getElementById('form');
+  const nameInput = document.getElementById('name');
+  const audioInput = document.getElementById('audioFile');
+  const audio = document.getElementById('sound');
+  const audioHelp = document.getElementById('audioHelp');
+  const toolbar = document.getElementById('toolbar');
+  const muteBtn = document.getElementById('mute');
+  const status = document.getElementById('soundStatus');
+
+  let W=0,H=0,DPR=1,startedAt=0,raf=0,currentName='',glyphs=[],audioURL='';
+  let muted=false,hasStarted=false;
+  const TOTAL=39;
+  const AUDIO_DURATION=53.48;
+
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=window.innerWidth; H=window.innerHeight;
+    canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
+    canvas.style.width=W+'px'; canvas.style.height=H+'px';
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener('resize',resize,{passive:true}); resize();
+
+  audioInput.addEventListener('change',()=>{
+    const file=audioInput.files && audioInput.files[0];
+    if(!file) return;
+    if(audioURL) URL.revokeObjectURL(audioURL);
+    audioURL=URL.createObjectURL(file);
+    audio.src=audioURL;
+    audio.load();
+    audioHelp.textContent='Custom audio loaded: '+file.name+' — it will play when the intro starts.';
+  });
+
+  function splitName(name){
+    const words=name.trim().toUpperCase().split(/\s+/);
+    if(words.length===1) return [words[0]];
+    // Balance the two lines by character count, keeping whole words together.
+    let best=1,bestDiff=Infinity;
+    for(let i=1;i<words.length;i++){
+      const a=words.slice(0,i).join(' '), b=words.slice(i).join(' ');
+      const diff=Math.abs(a.length-b.length);
+      if(diff<bestDiff){bestDiff=diff;best=i;}
+    }
+    return [words.slice(0,best).join(' '),words.slice(best).join(' ')];
+  }
+
+  function fontSizeFor(lines){
+    const longest=Math.max(...lines.map(s=>s.length));
+    const widthLimit=W*.88;
+    let size=Math.min(H*.17, W*.145, 132);
+    ctx.font=`700 ${size}px "Bodoni Moda", Georgia, serif`;
+    while(ctx.measureText('M'.repeat(longest)).width>widthLimit && size>23){
+      size-=2;
+      ctx.font=`700 ${size}px "Bodoni Moda", Georgia, serif`;
+    }
+    return size;
+  }
+
+  function buildGlyphs(name){
+    const lines=splitName(name);
+    const size=fontSizeFor(lines);
+    const lineGap=size*.98;
+    const startY=H/2-(lines.length-1)*lineGap/2;
+    glyphs=[];
+    ctx.font=`700 ${size}px "Bodoni Moda", Georgia, serif`;
+    lines.forEach((line,row)=>{
+      const widths=[...line].map(ch=>ctx.measureText(ch).width);
+      const total=widths.reduce((a,b)=>a+b,0);
+      let x=(W-total)/2;
+      const y=startY+row*lineGap;
+      [...line].forEach((ch,i)=>{
+        const cw=widths[i];
+        if(ch!==' '){
+          const side=(i+row)%2===0?-1:1;
+          glyphs.push({
+            ch, x:x+cw/2, y,
+            delay:7.2+glyphs.length*.72,
+            sx:W/2+side*(W*.72+(glyphs.length%3)*80),
+            sy:y+(glyphs.length%2===0?-1:1)*(H*.32+Math.random()*H*.24),
+            scale:4.5+Math.random()*2.5,
+            rot:(Math.random()-.5)*.13,
+            size
+          });
+        }
+        x+=cw;
+      });
+    });
+  }
+
+  const ease=(t)=>{t=Math.max(0,Math.min(1,t));return 1-Math.pow(1-t,4)};
+  function drawBackground(t){
+    ctx.fillStyle='#030000';ctx.fillRect(0,0,W,H);
+    const pulse=.5+.5*Math.sin(t*.65);
+    const glow=ctx.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,Math.max(W,H)*.75);
+    glow.addColorStop(0,`rgba(92,0,8,${.14+pulse*.09})`);
+    glow.addColorStop(.48,'rgba(32,0,4,.18)');
+    glow.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+
+    // Opening red light blades, fading as the title assembles.
+    const bladeAlpha=Math.max(0,1-t/5.5);
+    if(bladeAlpha>0){
+      ctx.save();ctx.globalAlpha=bladeAlpha;
+      for(let i=0;i<2;i++){
+        const x=i===0?W*.08:W*.92;
+        const grad=ctx.createLinearGradient(x-35,0,x+35,0);
+        grad.addColorStop(0,'rgba(255,0,25,0)');
+        grad.addColorStop(.5,`rgba(255,0,28,${.85})`);
+        grad.addColorStop(1,'rgba(255,0,25,0)');
+        ctx.fillStyle=grad;
+        ctx.shadowColor='#ff001e';ctx.shadowBlur=55;
+        ctx.beginPath();
+        ctx.moveTo(x-25,0);ctx.lineTo(x+25,0);
+        ctx.lineTo(x+75,H);ctx.lineTo(x+15,H);
+        ctx.closePath();ctx.fill();
+      }
+      ctx.restore();
+    }
+    // Soft drifting atmospheric haze.
+    for(let i=0;i<5;i++){
+      const x=(W*(.12+i*.19)+Math.sin(t*.18+i)*W*.08);
+      const y=H*(.35+i*.12)+Math.cos(t*.22+i)*35;
+      const r=Math.max(W,H)*(.12+i*.025);
+      const g=ctx.createRadialGradient(x,y,0,x,y,r);
+      g.addColorStop(0,'rgba(105,8,15,.055)');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    }
+    // Subtle film grain.
+    ctx.globalAlpha=.055;
+    for(let i=0;i<90;i++){
+      const x=(i*97+Math.floor(t*17)*31)%W;
+      const y=(i*173+Math.floor(t*23)*19)%H;
+      ctx.fillStyle=i%2?'#fff':'#b11';
+      ctx.fillRect(x,y,1.2,1.2);
+    }
+    ctx.globalAlpha=1;
+    const vignette=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*.15,W/2,H/2,Math.max(W,H)*.72);
+    vignette.addColorStop(0,'rgba(0,0,0,0)');
+    vignette.addColorStop(1,'rgba(0,0,0,.78)');
+    ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
+  }
+
+  function drawGlyph(g,t){
+    const p=ease((t-g.delay)/3.6);
+    const drift=Math.max(0,1-p);
+    const x=g.sx+(g.x-g.sx)*p;
+    const y=g.sy+(g.y-g.sy)*p;
+    const scale=g.scale+(1-g.scale)*p;
+    const rotation=g.rot*drift;
+    const alpha=Math.min(1,Math.max(0,(t-g.delay)/1.05));
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(rotation);
+    ctx.scale(scale,scale);
+    ctx.globalAlpha=alpha;
+    ctx.font=`700 ${g.size}px "Bodoni Moda", Georgia, serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineJoin='round';
+    // Red halo first, then a crisp outlined letter.
+    ctx.shadowColor='#ff101b';
+    ctx.shadowBlur=25+12*Math.sin(t*1.4+g.x*.01);
+    ctx.lineWidth=1.35;
+    ctx.strokeStyle='#ff303b';
+    ctx.strokeText(g.ch,0,0);
+    ctx.shadowBlur=5;
+    ctx.lineWidth=.55;
+    ctx.strokeStyle='#ff9a9a';
+    ctx.strokeText(g.ch,0,0);
+    ctx.fillStyle='rgba(110,0,8,.17)';
+    ctx.fillText(g.ch,0,0);
+    ctx.restore();
+  }
+
+  function frame(now){
+    const elapsed=(now-startedAt)/1000;
+    const t=Math.min(TOTAL, elapsed*TOTAL/AUDIO_DURATION);
+    drawBackground(t);
+    if(t < 7){
+      ctx.save(); ctx.globalAlpha=Math.max(0,1-t/7)*.72;
+      ctx.textAlign='center'; ctx.font='10px Arial'; ctx.fillStyle='#b56a6a';
+      ctx.letterSpacing='5px'; ctx.fillText('SOMETHING IS COMING',W/2,H*.78); ctx.restore();
+    } else if(t < 29){
+      ctx.save(); ctx.globalAlpha=.35; ctx.textAlign='center'; ctx.font='9px Arial'; ctx.fillStyle='#a34b4b';
+      ctx.letterSpacing='4px'; ctx.fillText('THE NAME IS TAKING SHAPE',W/2,H*.84); ctx.restore();
+    }
+    // A faint red horizontal flare during the final lockup.
+    if(t>29){
+      const a=Math.min(.65,(t-29)/3)*Math.max(0,1-(t-35)/10);
+      ctx.save();ctx.globalAlpha=a;
+      const grad=ctx.createLinearGradient(0,H*.5,W,H*.5);
+      grad.addColorStop(0,'rgba(255,0,0,0)');
+      grad.addColorStop(.5,'rgba(255,30,40,.8)');
+      grad.addColorStop(1,'rgba(255,0,0,0)');
+      ctx.fillStyle=grad;ctx.fillRect(0,H*.5-1,W,2);
+      ctx.restore();
+    }
+    glyphs.forEach(g=>drawGlyph(g,t));
+
+    if(elapsed<AUDIO_DURATION){
+      raf=requestAnimationFrame(frame);
+    } else {
+      status.textContent='WELCOME TO YOUR STORY';
+      toolbar.classList.add('show');
+      raf=0;
+    }
+  }
+
+  async function begin(){
+    currentName=nameInput.value.trim();
+    if(!currentName) return;
+    cancelAnimationFrame(raf);
+    toolbar.classList.remove('show');
+    status.textContent='A CINEMATIC EXPERIENCE';
+    buildGlyphs(currentName);
+    entry.classList.add('hide');
+    await new Promise(resolve=>setTimeout(resolve,250));
+    if(audio.src && !muted){
+      audio.currentTime=0;
+      audio.volume=.85;
+      audio.play().catch(()=>{status.textContent='Tap SOUND to start audio';});
+    }
+    startedAt=performance.now();
+    cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(frame);
+  }
+
+  form.addEventListener('submit',e=>{e.preventDefault();begin();});
+  document.getElementById('replay').addEventListener('click',begin);
+  document.getElementById('change').addEventListener('click',()=>{
+    audio.pause();cancelAnimationFrame(raf);
+    toolbar.classList.remove('show');
+    entry.classList.remove('hide');
+    status.textContent='A CINEMATIC EXPERIENCE';
+    nameInput.focus();
+  });
+  muteBtn.addEventListener('click',()=>{
+    muted=!muted;
+    if(muted){audio.pause();muteBtn.textContent='UNMUTE';}
+    else{
+      muteBtn.textContent='MUTE';
+      if(audio.src) audio.play().catch(()=>{});
+    }
+  });
+
+  // Redraw a still black stage until the user starts the experience.
+  drawBackground(0);
+})();
+</script>
+</body>
+</html>
